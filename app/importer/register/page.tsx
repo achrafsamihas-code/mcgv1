@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 
 export default function ImporterRegisterPage() {
   return (
-    <main className="min-h-screen bg-navy-50/40 px-4 py-10 sm:px-6">
+    <main className="min-h-screen bg-[#0F172A] px-4 py-10 sm:px-6">
       <RegistrationWizard />
     </main>
   );

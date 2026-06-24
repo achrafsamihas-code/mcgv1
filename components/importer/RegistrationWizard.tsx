@@ -1,96 +1,137 @@
 "use client";
 
-import { useState } from "react";
-import { ArrowLeft, ArrowRight, Check, Ship } from "lucide-react";
-import {
-  IMPORT_VOLUME_TIERS,
-  INDUSTRY_VERTICALS,
-  PRODUCT_CATEGORIES,
-  type ImportVolumeTier,
-  type IndustryVertical,
-  type ProductCategory,
-} from "@/lib/importer/types";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Building2, Check, Loader2, Ship } from "lucide-react";
+import { createClient, SUPABASE_CONFIGURED } from "@/lib/supabase/client";
 import { Button } from "./ui";
 
-type Step = 0 | 1;
-const steps = ["Account Details", "Sourcing Profile"];
-
-type WizardState = {
+/**
+ * Importer (Buyer) corporate onboarding.
+ *
+ * Renders a focused company profile form and performs a live UPSERT against
+ * `public.profiles` for the signed-in user (role BUYER, status APPROVED). On
+ * success it routes to the buyer command center at `/importer`.
+ *
+ * Brand tokens: deep dark backdrop (#0F172A) framing, accent orange (#F97316)
+ * for the primary action and key emphasis.
+ */
+type FormState = {
   fullName: string;
   companyName: string;
-  country: string;
-  city: string;
   phone: string;
-  email: string;
-  password: string;
-  industry: IndustryVertical;
-  volumeTier: ImportVolumeTier;
-  interests: ProductCategory[];
+  importLicense: string;
+  sourceCountry: string;
 };
 
-const initial: WizardState = {
+type FormErrors = Partial<Record<keyof FormState, string>>;
+
+const initial: FormState = {
   fullName: "",
   companyName: "",
-  country: "",
-  city: "",
   phone: "",
-  email: "",
-  password: "",
-  industry: "Automotive",
-  volumeTier: IMPORT_VOLUME_TIERS[0],
-  interests: [],
+  importLicense: "",
+  sourceCountry: "",
 };
 
 export function RegistrationWizard() {
-  const [step, setStep] = useState<Step>(0);
-  const [data, setData] = useState<WizardState>(initial);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [submitted, setSubmitted] = useState(false);
+  const router = useRouter();
+  const [data, setData] = useState<FormState>(initial);
+  const [errors, setErrors] = useState<FormErrors>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [hydrating, setHydrating] = useState<boolean>(SUPABASE_CONFIGURED);
 
-  const set = <K extends keyof WizardState>(key: K, value: WizardState[K]) =>
+  const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setData((prev) => ({ ...prev, [key]: value }));
 
-  const toggleInterest = (c: ProductCategory) =>
-    setData((prev) => ({
-      ...prev,
-      interests: prev.interests.includes(c)
-        ? prev.interests.filter((x) => x !== c)
-        : [...prev.interests, c],
-    }));
+  // Prefill from the signed-in user's existing profile (if any).
+  useEffect(() => {
+    if (!SUPABASE_CONFIGURED) return;
+    const db = createClient();
+    let active = true;
 
-  const validateStep = (s: Step): boolean => {
-    const e: Record<string, string> = {};
-    if (s === 0) {
-      if (!data.fullName.trim()) e.fullName = "Required";
-      if (!data.country.trim()) e.country = "Required";
-      if (!data.city.trim()) e.city = "Required";
-      if (!data.phone.trim()) e.phone = "Required";
-      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(data.email)) e.email = "Valid email required";
-      if (data.password.length < 8) e.password = "Min 8 characters";
-    }
-    if (s === 1 && data.interests.length === 0) e.interests = "Select at least one category";
+    (async () => {
+      const { data: auth } = await db.auth.getUser();
+      if (!auth.user) {
+        if (active) setHydrating(false);
+        return;
+      }
+      const { data: profile } = await db
+        .from("profiles")
+        .select("full_name, company_name, phone_number, import_license_number, country_source")
+        .eq("id", auth.user.id)
+        .maybeSingle();
+
+      if (!active) return;
+      if (profile) {
+        setData({
+          fullName: profile.full_name ?? "",
+          companyName: profile.company_name ?? "",
+          phone: profile.phone_number ?? "",
+          importLicense: profile.import_license_number ?? "",
+          sourceCountry: profile.country_source ?? "",
+        });
+      }
+      setHydrating(false);
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const validate = (): boolean => {
+    const e: FormErrors = {};
+    if (!data.fullName.trim()) e.fullName = "Required";
+    if (!data.companyName.trim()) e.companyName = "Required";
+    if (!data.phone.trim()) e.phone = "Required";
+    if (!data.sourceCountry.trim()) e.sourceCountry = "Required";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
-  const next = () => validateStep(step) && setStep(1);
-  const back = () => setStep(0);
-  const submit = () => validateStep(1) && setSubmitted(true);
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validate()) return;
+    setSubmitError(null);
 
-  if (submitted) {
-    return (
-      <div className="mx-auto max-w-lg rounded-2xl border border-navy-100 bg-white p-8 text-center shadow-sm">
-        <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
-          <Check className="h-7 w-7" aria-hidden="true" />
-        </span>
-        <h2 className="mt-4 text-xl font-bold text-navy-900">Welcome aboard, {data.fullName.split(" ")[0]}!</h2>
-        <p className="mt-2 text-sm text-navy-600">Your importer account is ready. Start sourcing products and suppliers from your command center.</p>
-        <a href="/importer" className="mt-6 inline-flex cursor-pointer items-center gap-2 rounded-xl bg-accent-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors duration-200 hover:bg-accent-600">
-          Go to Command Center
-        </a>
-      </div>
+    if (!SUPABASE_CONFIGURED) {
+      router.push("/importer");
+      return;
+    }
+
+    setSubmitting(true);
+    const db = createClient();
+    const { data: auth } = await db.auth.getUser();
+    if (!auth.user) {
+      setSubmitError("You must be signed in to complete onboarding.");
+      setSubmitting(false);
+      return;
+    }
+
+    const { error } = await db.from("profiles").upsert(
+      {
+        id: auth.user.id,
+        full_name: data.fullName.trim(),
+        company_name: data.companyName.trim(),
+        phone_number: data.phone.trim(),
+        import_license_number: data.importLicense.trim() || null,
+        country_source: data.sourceCountry.trim(),
+        role: "BUYER",
+        status: "APPROVED",
+      },
+      { onConflict: "id" }
     );
-  }
+
+    if (error) {
+      setSubmitError(error.message);
+      setSubmitting(false);
+      return;
+    }
+
+    router.push("/importer");
+  };
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -99,112 +140,122 @@ export function RegistrationWizard() {
           <Ship className="h-5 w-5" aria-hidden="true" />
         </span>
         <div>
-          <p className="text-lg font-bold text-navy-900">Importer Sign-Up</p>
-          <p className="text-sm text-navy-500">Source globally with MCG Global</p>
+          <p className="text-lg font-bold text-navy-900">Importer Onboarding</p>
+          <p className="text-sm text-navy-500">Complete your corporate buyer profile</p>
         </div>
       </div>
 
-      <ol className="mb-6 flex items-center">
-        {steps.map((label, i) => (
-          <li key={label} className="flex flex-1 items-center">
-            <div className="flex items-center gap-2">
-              <span className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${
-                i < step ? "bg-emerald-500 text-white" : i === step ? "bg-accent-500 text-white" : "bg-navy-100 text-navy-400"
-              }`}>
-                {i < step ? <Check className="h-4 w-4" aria-hidden="true" /> : i + 1}
-              </span>
-              <span className={`text-sm font-medium ${i === step ? "text-navy-900" : "text-navy-400"}`}>{label}</span>
-            </div>
-            {i < steps.length - 1 && <span className={`mx-3 h-0.5 flex-1 ${i < step ? "bg-emerald-500" : "bg-navy-100"}`} />}
-          </li>
-        ))}
-      </ol>
-
-      <div className="rounded-2xl border border-navy-100 bg-white p-6 shadow-sm">
-        {step === 0 && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <WField label="Full Name" value={data.fullName} error={errors.fullName} onChange={(v) => set("fullName", v)} required />
-              <WField label="Corporate Entity (optional)" value={data.companyName} onChange={(v) => set("companyName", v)} />
-              <WField label="Target Country" value={data.country} error={errors.country} onChange={(v) => set("country", v)} required />
-              <WField label="Base City" value={data.city} error={errors.city} onChange={(v) => set("city", v)} required />
-              <WField label="Phone Number" value={data.phone} error={errors.phone} onChange={(v) => set("phone", v)} required />
-              <WField label="Corporate Email" type="email" value={data.email} error={errors.email} onChange={(v) => set("email", v)} required />
-            </div>
-            <WField label="Password" type="password" value={data.password} error={errors.password} onChange={(v) => set("password", v)} required />
-          </div>
-        )}
-
-        {step === 1 && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-navy-800">Industry Vertical</label>
-                <select value={data.industry} onChange={(e) => set("industry", e.target.value as IndustryVertical)} className="w-full cursor-pointer rounded-lg border border-navy-200 px-3 py-2 text-sm focus:border-accent-400">
-                  {INDUSTRY_VERTICALS.map((v) => <option key={v} value={v}>{v}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-navy-800">Annual Import Volume</label>
-                <select value={data.volumeTier} onChange={(e) => set("volumeTier", e.target.value as ImportVolumeTier)} className="w-full cursor-pointer rounded-lg border border-navy-200 px-3 py-2 text-sm focus:border-accent-400">
-                  {IMPORT_VOLUME_TIERS.map((t) => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
-            </div>
-            <div>
-              <label className="mb-2 block text-sm font-medium text-navy-800">Targeted Interest Categories <span className="text-accent-500">*</span></label>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {PRODUCT_CATEGORIES.map((c) => (
-                  <label key={c} className="flex cursor-pointer items-center gap-2 rounded-lg border border-navy-200 px-3 py-2 text-sm text-navy-700 transition-colors duration-150 hover:bg-navy-50">
-                    <input type="checkbox" checked={data.interests.includes(c)} onChange={() => toggleInterest(c)} className="h-4 w-4 cursor-pointer rounded border-navy-300 text-accent-500 focus:ring-accent-400" />
-                    {c}
-                  </label>
-                ))}
-              </div>
-              {errors.interests && <p className="mt-1 text-xs font-medium text-red-600">{errors.interests}</p>}
-            </div>
-          </div>
-        )}
-
-        <div className="mt-6 flex items-center justify-between border-t border-navy-100 pt-5">
-          <Button variant="secondary" onClick={back} disabled={step === 0}><ArrowLeft className="h-4 w-4" aria-hidden="true" />Back</Button>
-          {step < 1 ? (
-            <Button onClick={next}>Continue<ArrowRight className="h-4 w-4" aria-hidden="true" /></Button>
-          ) : (
-            <Button variant="success" onClick={submit}><Check className="h-4 w-4" aria-hidden="true" />Create Account</Button>
-          )}
+      <form
+        onSubmit={submit}
+        className="rounded-2xl border border-navy-100 bg-white p-6 shadow-sm"
+        noValidate
+      >
+        <div className="mb-5 flex items-center gap-3 rounded-xl bg-navy-950 px-4 py-3">
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent-500/20 text-accent-400">
+            <Building2 className="h-5 w-5" aria-hidden="true" />
+          </span>
+          <p className="text-sm font-medium text-navy-100">
+            Verified buyer accounts unlock live sourcing, RFQs and supplier quotations.
+          </p>
         </div>
-      </div>
+
+        {hydrating ? (
+          <div className="flex items-center justify-center gap-2 py-10 text-sm text-navy-400">
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            Loading your profile…
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="Full Name" error={errors.fullName} required>
+                <input
+                  value={data.fullName}
+                  onChange={(e) => set("fullName", e.target.value)}
+                  className={inputClass(!!errors.fullName)}
+                  placeholder="e.g. Yassine El Amrani"
+                />
+              </Field>
+              <Field label="Company Name" error={errors.companyName} required>
+                <input
+                  value={data.companyName}
+                  onChange={(e) => set("companyName", e.target.value)}
+                  className={inputClass(!!errors.companyName)}
+                  placeholder="e.g. Amrani Import Co."
+                />
+              </Field>
+              <Field label="Phone Number" error={errors.phone} required>
+                <input
+                  type="tel"
+                  value={data.phone}
+                  onChange={(e) => set("phone", e.target.value)}
+                  className={inputClass(!!errors.phone)}
+                  placeholder="+212 6xx xxx xxx"
+                />
+              </Field>
+              <Field label="Source Country" error={errors.sourceCountry} required>
+                <input
+                  value={data.sourceCountry}
+                  onChange={(e) => set("sourceCountry", e.target.value)}
+                  className={inputClass(!!errors.sourceCountry)}
+                  placeholder="e.g. China"
+                />
+              </Field>
+            </div>
+            <Field label="Import License Number (optional)">
+              <input
+                value={data.importLicense}
+                onChange={(e) => set("importLicense", e.target.value)}
+                className={inputClass(false)}
+                placeholder="Customs / trade license reference"
+              />
+            </Field>
+
+            {submitError && (
+              <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-600">
+                {submitError}
+              </p>
+            )}
+
+            <div className="flex justify-end border-t border-navy-100 pt-5">
+              <Button type="submit" disabled={submitting}>
+                {submitting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Check className="h-4 w-4" aria-hidden="true" />
+                )}
+                {submitting ? "Saving…" : "Save & Enter Command Center"}
+              </Button>
+            </div>
+          </div>
+        )}
+      </form>
     </div>
   );
 }
 
-function WField({
+function inputClass(hasError: boolean): string {
+  return `w-full rounded-lg border px-3 py-2 text-sm focus:border-accent-400 ${
+    hasError ? "border-red-300" : "border-navy-200"
+  }`;
+}
+
+function Field({
   label,
-  value,
-  onChange,
   error,
-  type = "text",
   required,
+  children,
 }: {
   label: string;
-  value: string;
-  onChange: (v: string) => void;
   error?: string;
-  type?: string;
   required?: boolean;
+  children: React.ReactNode;
 }) {
   return (
     <div>
       <label className="mb-1.5 block text-sm font-medium text-navy-800">
         {label} {required && <span className="text-accent-500">*</span>}
       </label>
-      <input
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className={`w-full rounded-lg border px-3 py-2 text-sm focus:border-accent-400 ${error ? "border-red-300" : "border-navy-200"}`}
-      />
+      {children}
       {error && <p className="mt-1 text-xs font-medium text-red-600">{error}</p>}
     </div>
   );

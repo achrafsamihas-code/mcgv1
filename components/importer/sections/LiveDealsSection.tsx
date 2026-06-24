@@ -125,7 +125,7 @@ export function LiveDealsSection({ buyerId }: { buyerId: string | null }) {
         <Panel>
           <PanelHeader
             title={`Live Offers — ${activeRfq.product_title}`}
-            description={`Target budget $${(activeRfq.target_budget ?? 0).toLocaleString()} · ${(activeRfq.quantity ?? 0).toLocaleString()} units`}
+            description={`Target budget $${activeRfq.target_budget ?? "—"} · ${(activeRfq.quantity ?? 0).toLocaleString()} units`}
             action={
               <Button variant="secondary" size="sm" onClick={() => loadQuotes(selectedRfq)} disabled={quotesLoading}>
                 <RefreshCw className={`h-4 w-4 ${quotesLoading ? "animate-spin" : ""}`} aria-hidden="true" />

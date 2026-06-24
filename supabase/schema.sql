@@ -56,6 +56,12 @@ begin
       'TRUCK', 'VAN', 'CAR', 'MOTORCYCLE'
     );
   end if;
+
+  if not exists (select 1 from pg_type where typname = 'rfq_status') then
+    create type public.rfq_status as enum (
+      'OPEN', 'QUOTED', 'CLOSED'
+    );
+  end if;
 end$$;
 
 
@@ -71,10 +77,18 @@ create table if not exists public.profiles (
   phone_number  text,
   role          public.platform_role        not null default 'BUYER',
   status        public.verification_status  not null default 'PENDING',
+  -- Importer (Buyer) corporate onboarding fields.
+  import_license_number text,
+  country_source        text,
   created_at    timestamptz                 not null default now()
 );
 comment on table public.profiles is
   'Platform identity, role and verification status, mirrored 1:1 from auth.users.';
+
+-- Idempotent column backfill for databases provisioned before the Importer
+-- onboarding fields existed.
+alter table public.profiles add column if not exists import_license_number text;
+alter table public.profiles add column if not exists country_source text;
 
 -- 3.2 products — owned by a SUPPLIER profile (Req 3.1)
 create table if not exists public.products (
@@ -115,11 +129,17 @@ create table if not exists public.rfqs (
   id             uuid primary key default gen_random_uuid(),
   buyer_id       uuid not null references public.profiles (id) on delete cascade,
   product_title  text not null,
+  category       text,
   specifications text,
-  target_budget  numeric,
+  target_budget  text,
   quantity       integer,
+  status         public.rfq_status not null default 'OPEN',
   created_at     timestamptz not null default now()
 );
+
+-- Idempotent column backfill for pre-existing rfqs tables.
+alter table public.rfqs add column if not exists category text;
+alter table public.rfqs add column if not exists status public.rfq_status not null default 'OPEN';
 
 -- 3.6 quotations — a SUPPLIER's offer against an RFQ (Req 3.5)
 create table if not exists public.quotations (

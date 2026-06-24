@@ -176,13 +176,52 @@ export async function insertRfq(
   payload: {
     buyer_id: string;
     product_title: string;
+    category: string | null;
     specifications: string | null;
-    target_budget: number | null;
+    target_budget: string | null;
     quantity: number | null;
   }
 ): Promise<Result<Rfq>> {
   const { data, error } = await db.from("rfqs").insert(payload).select().single();
   return error ? fail(error.message) : ok(data);
+}
+
+/** Count of all RFQs submitted by a specific buyer (head-only, exact count). */
+export async function countBuyerRfqs(
+  db: DB,
+  buyerId: string
+): Promise<Result<number>> {
+  const { count, error } = await db
+    .from("rfqs")
+    .select("*", { count: "exact", head: true })
+    .eq("buyer_id", buyerId);
+  return error ? fail(error.message) : ok(count ?? 0);
+}
+
+/** Count of active (non-cancelled, non-completed) deals for a buyer. */
+export async function countBuyerActiveDeals(
+  db: DB,
+  buyerId: string
+): Promise<Result<number>> {
+  const { count, error } = await db
+    .from("deals")
+    .select("*", { count: "exact", head: true })
+    .eq("buyer_id", buyerId)
+    .not("status", "in", "(COMPLETED,CANCELLED)");
+  return error ? fail(error.message) : ok(count ?? 0);
+}
+
+/** Count of OPEN RFQs for a buyer (awaiting quotations). */
+export async function countBuyerOpenRfqs(
+  db: DB,
+  buyerId: string
+): Promise<Result<number>> {
+  const { count, error } = await db
+    .from("rfqs")
+    .select("*", { count: "exact", head: true })
+    .eq("buyer_id", buyerId)
+    .eq("status", "OPEN");
+  return error ? fail(error.message) : ok(count ?? 0);
 }
 
 /** A buyer's own RFQs, newest first. */

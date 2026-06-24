@@ -20,6 +20,7 @@ import {
 import { ImporterSidebar } from "./ImporterSidebar";
 import { ImporterTopbar } from "./ImporterTopbar";
 import { HomeSection } from "./sections/HomeSection";
+import { BuyerHomeSection } from "./sections/BuyerHomeSection";
 import { SourcingSection } from "./sections/SourcingSection";
 import { RfqsSection } from "./sections/RfqsSection";
 import { RfqWizard } from "./sections/RfqWizard";
@@ -84,7 +85,12 @@ export function ImporterDashboard() {
           onNewRFQ={() => setWizardOpen(true)}
         />
         <main className="px-4 py-6 sm:px-6">
-          {active === "home" && <HomeSection analytics={analytics} rfqs={rfqs} shipments={shipments} />}
+          {active === "home" && (
+            <div className="space-y-6">
+              <BuyerHomeSection buyerId={buyerId} />
+              <HomeSection analytics={analytics} rfqs={rfqs} shipments={shipments} />
+            </div>
+          )}
           {active === "sourcing" && (
             <SourcingSection
               products={marketProducts}

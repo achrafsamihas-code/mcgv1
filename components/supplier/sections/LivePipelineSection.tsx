@@ -134,7 +134,7 @@ export function LivePipelineSection() {
                 </div>
                 <div className="mt-1 flex flex-wrap gap-x-6 gap-y-1 text-sm">
                   <span className="text-navy-600">Qty: <span className="font-semibold text-navy-900">{(r.quantity ?? 0).toLocaleString()}</span></span>
-                  <span className="text-navy-600">Target budget: <span className="font-semibold text-accent-600">${(r.target_budget ?? 0).toLocaleString()}</span></span>
+                  <span className="text-navy-600">Target budget: <span className="font-semibold text-accent-600">${r.target_budget ?? "—"}</span></span>
                 </div>
                 {r.specifications && (
                   <p className="mt-2 rounded-lg bg-navy-50 px-3 py-2 text-sm text-navy-600">{r.specifications}</p>
@@ -159,7 +159,7 @@ export function LivePipelineSection() {
         {target && (
           <form onSubmit={submit} className="space-y-4" noValidate>
             <div className="rounded-lg bg-navy-50 px-3 py-2.5 text-sm text-navy-600">
-              {(target.quantity ?? 0).toLocaleString()} units · target ${(target.target_budget ?? 0).toLocaleString()}
+              {(target.quantity ?? 0).toLocaleString()} units · target ${target.target_budget ?? "—"}
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>

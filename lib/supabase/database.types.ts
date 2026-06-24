@@ -31,6 +31,8 @@ export type DealStatus =
 
 export type VehicleType = "TRUCK" | "VAN" | "CAR" | "MOTORCYCLE";
 
+export type RfqStatus = "OPEN" | "QUOTED" | "CLOSED";
+
 /** Commercial accounts require admin verification before public visibility. */
 export const COMMERCIAL_ROLES: PlatformRole[] = [
   "SUPPLIER",
@@ -57,6 +59,8 @@ export type Profile = {
   phone_number: string | null;
   role: PlatformRole;
   status: VerificationStatus;
+  import_license_number: string | null;
+  country_source: string | null;
   created_at: string;
 };
 
@@ -95,9 +99,11 @@ export type Rfq = {
   id: string;
   buyer_id: string;
   product_title: string;
+  category: string | null;
   specifications: string | null;
-  target_budget: number | null;
+  target_budget: string | null;
   quantity: number | null;
+  status: RfqStatus;
   created_at: string;
 };
 
@@ -129,7 +135,10 @@ export type ProductInsert = Omit<Product, "id" | "created_at" | "images"> & {
   images?: string[];
 };
 export type WarehouseInsert = Omit<Warehouse, "id" | "created_at">;
-export type RfqInsert = Omit<Rfq, "id" | "created_at">;
+export type RfqInsert = Omit<Rfq, "id" | "created_at" | "status" | "category"> & {
+  status?: RfqStatus;
+  category?: string | null;
+};
 export type QuotationInsert = Omit<Quotation, "id" | "created_at">;
 
 // --- Joined read shapes ----------------------------------------------------
@@ -205,6 +214,7 @@ export type Database = {
       verification_status: VerificationStatus;
       deal_status: DealStatus;
       vehicle_type: VehicleType;
+      rfq_status: RfqStatus;
     };
   };
 };

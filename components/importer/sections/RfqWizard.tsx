@@ -124,8 +124,9 @@ export function RfqWizard({
     const res = await insertRfq(db, {
       buyer_id: auth.user.id,
       product_title: optimistic.title,
+      category: optimistic.category,
       specifications: optimistic.specifications,
-      target_budget: optimistic.targetBudget,
+      target_budget: String(optimistic.targetBudget),
       quantity: optimistic.quantity,
     });
 
